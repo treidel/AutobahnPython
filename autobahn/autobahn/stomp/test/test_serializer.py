@@ -29,10 +29,8 @@ from __future__ import absolute_import
 # from twisted.trial import unittest
 import unittest
 
-from autobahn.wamp import message
-from autobahn.wamp import role
-from autobahn.wamp import serializer
-
+from autobahn.stomp import message
+from autobahn.stomp import serializer
 
 def generate_test_messages():
     return [
@@ -41,59 +39,44 @@ def generate_test_messages():
         message.Connect('test.com', '1.2'),
 	message.Connected('1.2'),
 	message.Send('/test', u'test message'),
-	message.Send('/test' u'test message', '123456'),
+	message.Send('/test', u'test message', '123456'),
 	message.Error(),
-	message.Error('error message', u'detailed error message' '123456')
+	message.Error('error message', u'detailed error message' '123456'),
 	message.Receipt('123456')
     ]
 
 
 class TestSerializer(unittest.TestCase):
 
-    def setUp(self):
-        self.serializers = []
+	def setUp(self):
+		self.serializer = serializer.Serializer()
 
-        # JSON serializer is always available
-        self.serializers.append(serializer.JsonSerializer())
-        self.serializers.append(serializer.JsonSerializer(batched=True))
+    	def test_roundtrip(self):
+        	for msg in generate_test_messages():
+                	# serialize message
+                	payload = self.serializer.serialize(msg)
 
-        # MsgPack serializers are optional
-        if hasattr(serializer, 'MsgPackSerializer'):
-            self.serializers.append(serializer.MsgPackSerializer())
-            self.serializers.append(serializer.MsgPackSerializer(batched=True))
+                	# unserialize message again
+                	msg2 = self.serializer.unserialize(payload, False)
 
-    def test_roundtrip(self):
-        for msg in generate_test_messages():
-            for ser in self.serializers:
+			# clear the cache on the serialized object
+			msg.uncache()
 
-                # serialize message
-                payload, binary = ser.serialize(msg)
+                	# must be equal: message roundtrips via the serializer
+                	self.assertEqual(msg, msg2)
 
-                # unserialize message again
-                msg2 = ser.unserialize(payload, binary)
-
-                # must be equal: message roundtrips via the serializer
-                self.assertEqual([msg], msg2)
-
-    def test_caching(self):
-        for msg in generate_test_messages():
-            # message serialization cache is initially empty
-            self.assertEqual(msg._serialized, {})
-            for ser in self.serializers:
-
-                # verify message serialization is not yet cached
-                self.assertFalse(ser._serializer in msg._serialized)
-                payload, binary = ser.serialize(msg)
-
-                # now the message serialization must be cached
-                self.assertTrue(ser._serializer in msg._serialized)
-                self.assertEqual(msg._serialized[ser._serializer], payload)
-
-                # and after resetting the serialization cache, message
-                # serialization is gone
-                msg.uncache()
-                self.assertFalse(ser._serializer in msg._serialized)
-
+    	def test_caching(self):
+        	for msg in generate_test_messages():
+            		# message serialization cache is initially empty
+            		self.assertEqual(msg._serialized, None)
+                	# do the serialization
+                	payload = self.serializer.serialize(msg)
+                	# now the message serialization must be cached
+                	self.assertNotEqual(msg._serialized, None)
+                	# and after resetting the serialization cache, message
+                	# serialization is gone
+                	msg.uncache()
+                	self.assertEquals(msg._serialized, None)
 
 if __name__ == '__main__':
     unittest.main()

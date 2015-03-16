@@ -34,13 +34,13 @@ from autobahn import util
 from autobahn.stomp.exception import ProtocolError
 from autobahn.stomp.interfaces import IMessage
 
-__all__ = ('STOMP',
-           'Connect',
-           'Connected',
-           'Send',
-           'Disconnect',
-           'Receipt',
-           'Error')
+__all__ = (u'STOMP',
+           u'Connect',
+           u'Connected',
+           u'Send',
+           u'Disconnect',
+           u'Receipt',
+           u'Error')
 
 
 class Message(util.EqualityMixin):
@@ -52,13 +52,13 @@ class Message(util.EqualityMixin):
 
     	def __init__(self):
         	# serialization cache: mapping from ISerializer instances to serialized bytes
-        	self._serialized = [] 
+        	self._serialized = None
 
     	def uncache(self):
         	"""
         	Implements :func:`autobahn.stomp.interfaces.IMessage.uncache`
         	"""
-        	self._serialized = []
+        	self._serialized = None
 
 
 	def serialize(self):

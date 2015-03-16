@@ -33,11 +33,6 @@ from autobahn.stomp.interfaces import IObjectSerializer, ISerializer
 from autobahn.stomp.exception import ProtocolError
 from autobahn.stomp import message
 
-# note: __all__ must be a list here, since we dynamically
-# extend it depending on availability of more serializers
-__all__ = ['Serializer']
-
-
 class Serializer:
 	"""
     	Class for STOMP serializer. A STOMP serializer is the core glue between
@@ -56,7 +51,9 @@ class Serializer:
         	message.STOMP.MESSAGE_TYPE: message.STOMP,
         	message.Connect.MESSAGE_TYPE: message.Connect,
         	message.Connected.MESSAGE_TYPE: message.Connected,
-        	message.Send.MESSAGE_TYPE: message.Send
+        	message.Send.MESSAGE_TYPE: message.Send,
+		message.Error.MESSAGE_TYPE: message.Error,
+		message.Receipt.MESSAGE_TYPE: message.Receipt
     	}
 
 	def serialize(self, msg):
@@ -72,16 +69,21 @@ class Serializer:
 			# create the entry
 			value = key + ":" + value
 			# append to the end 
-			values.append(value) 
-		# insert empty line
-		values.append("")		
+			values.append(value) 	
 		# if we have a body append it 
 		if body is not None:
-			values.append(body)
-		# convert into a string with each line separated by a line feed with a zero terminator
-		frame = "\n".join(values) + '\0';
+			# insert a content-length header
+			value = 'content-length:' + str(len(body))
+			values.append(value)
+		# convert the headers into a string with each line separated by a line feed
+		header = "\n".join(values);
+		# create the final frame
+		if body is not None:
+			frame = header + '\n\n' + body + '\0';
+		else:
+			frame = header + '\n' + '\0';
 		# done
-		return frame
+		return frame.encode('utf-8')
 	
 
 	def unserialize(self, payload, isBinary):
@@ -92,9 +94,10 @@ class Serializer:
 		# only allow text (no binary)
 		if isBinary:
                 	raise ProtocolError("invalid serialization of STOMP message (binary {0}, but expected {1})".format(isBinary, False))
-		
+		# decode from unicode	
+		decoded = payload.decode('utf-8')
 		# split into lines
-		lines = LINEEND_REGEX.split(payload)
+		lines = self.LINE_ENDING_REGEX.split(decoded)
 		# first line is the command
 		command = lines.pop(0)
 
@@ -104,13 +107,14 @@ class Serializer:
         	if Klass is None:
 			raise ProtocolError("invalid STOMP message type {0}".format(command))
 
-		# parse the headers until we find an empty line
+		# parse the headers until we find an empty line or the terminator
 		headers = {}
-		while lines[0] != ""
+		while lines[0] != '' and lines[0] != '\0':
 			# get the line
 			line = lines.pop(0)
+			# check fo
 		 	# parse out the header
-		        match = HEADER_REGEX.match(line)
+		        match = self.HEADER_REGEX.match(line)
 			if match is None:
 				raise ProtocolError("invalid header line in STOMP message ({0})".format(line))
 			# extract the type + value
@@ -123,7 +127,18 @@ class Serializer:
 		# if we reached the last line then there's no body
 		body = None
 		if len(lines) > 1:
+			# remove the empty string
+			lines.pop(0)
+			# recreate the body			
 			body = '\n'.join(lines)
+			# pop off the last character 
+			body, terminator = body[:-1], body[-1]
+			if terminator != '\0':
+				raise ProtocolError("no terminator character found in STOMP message");
+		else:
+			# ensure they provided the terminator character
+			if lines[0] != '\0':
+				raise ProtocolError("no terminator character found in STOMP message");
 
         	# this might again raise `ProtocolError` ..
         	msg = Klass.parse(headers, body)
