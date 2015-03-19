@@ -30,8 +30,9 @@ import inspect
 import six
 from six import StringIO
 
-from autobahn.stomp.interfaces import ISession, \
-    ISender
+from autobahn.stomp.interfaces import ITransportHandler
+from autobahn.stomp.interfaces import ISession
+from autobahn.stomp.interfaces import ISender
 
 from autobahn import util
 from autobahn import stomp
@@ -205,7 +206,8 @@ class ApplicationSession(BaseSession):
         else:
 
             if isinstance(msg, message.Receipt):
-                if msg.receipt_id in self._send_reqs:
+		receipt_id = int(msg.receipt_id)
+                if receipt_id in self._send_reqs:
 
                     d = self._send_reqs.pop(msg.receipt_id)
                     self._resolve_future(d, None)
@@ -276,7 +278,7 @@ class ApplicationSession(BaseSession):
         else:
             raise SessionNotReady(u"Already requested to close the session")
 
-    def send(self, destination, payload)
+    def send(self, destination, payload):
         """
         Implements :func:`autobahn.stomp.interfaces.ISender.send`
         """
@@ -289,7 +291,7 @@ class ApplicationSession(BaseSession):
 
         receipt = util.id()
 
-        msg = message.Send(destination, payload, receipt)
+        msg = message.Send(destination, payload, str(receipt))
         d = self._create_future()
         self._send_reqs[receipt] = d
         self._transport.send(msg)
@@ -305,8 +307,15 @@ class ApplicationSessionFactory:
 
     session = ApplicationSession
     """
-   STOMP application session class to be used in this factory.
-   """
+    STOMP application session class to be used in this factory.
+    """
+
+    def __init__(self, host):
+        """
+        Constructor.
+        """
+	self.host = host
+
 
     def __call__(self):
         """
@@ -315,6 +324,6 @@ class ApplicationSessionFactory:
         :returns: -- An instance of the STOMP application session class as
                      given by `self.session`.
         """
-        session = self.session()
+        session = self.session(self.host)
         session.factory = self
         return session

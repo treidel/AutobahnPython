@@ -81,7 +81,7 @@ class Serializer:
 		if body is not None:
 			frame = header + '\n\n' + body + '\0';
 		else:
-			frame = header + '\n' + '\0';
+			frame = header + '\n\n' + '\0';
 		# done
 		return frame.encode('utf-8')
 	
@@ -96,23 +96,24 @@ class Serializer:
                 	raise ProtocolError("invalid serialization of STOMP message (binary {0}, but expected {1})".format(isBinary, False))
 		# decode from unicode	
 		decoded = payload.decode('utf-8')
-		# split into lines
-		lines = self.LINE_ENDING_REGEX.split(decoded)
-		# first line is the command
-		command = lines.pop(0)
+		# split into header and payload
+		position = decoded.find('\n\n')
+		if position == -1:
+			raise ProtocolError("invalid serialization of STOMP message (no payload EOL found)")
+		header, octets = decoded[:position], decoded[position + 2:]
 
+		# split the header into lines
+		lines = self.LINE_ENDING_REGEX.split(header)
+		# first part is the command
+		command = lines.pop(0)
 		# decode the class
         	Klass = self.MESSAGE_TYPE_MAP.get(command)
 		# make sure this is a command we understand
         	if Klass is None:
 			raise ProtocolError("invalid STOMP message type {0}".format(command))
-
 		# parse the headers until we find an empty line or the terminator
 		headers = {}
-		while lines[0] != '' and lines[0] != '\0':
-			# get the line
-			line = lines.pop(0)
-			# check fo
+		for line in lines:
 		 	# parse out the header
 		        match = self.HEADER_REGEX.match(line)
 			if match is None:
@@ -124,20 +125,14 @@ class Serializer:
 			if not key in headers:
 				headers[key] = value	
 
-		# if we reached the last line then there's no body
+		# assume there won't be a body
 		body = None
-		if len(lines) > 1:
-			# remove the empty string
-			lines.pop(0)
-			# recreate the body			
-			body = '\n'.join(lines)
+		# we should take into account content-length... 
+                # for now we'll cheat and pick off an empty body via the terminator 
+		if octets != '\0':
 			# pop off the last character 
-			body, terminator = body[:-1], body[-1]
+			body, terminator = octets[:-1], octets[-1]
 			if terminator != '\0':
-				raise ProtocolError("no terminator character found in STOMP message");
-		else:
-			# ensure they provided the terminator character
-			if lines[0] != '\0':
 				raise ProtocolError("no terminator character found in STOMP message");
 
         	# this might again raise `ProtocolError` ..

@@ -35,7 +35,8 @@ from twisted.internet.defer import maybeDeferred
 from twisted.python import log
 from twisted.internet.interfaces import ITransport
 
-from autobahn.wamp import websocket
+from autobahn.stomp import websocket as stompwebsocket
+from autobahn.wamp import websocket as wampwebsocket
 from autobahn.websocket import protocol
 from autobahn.websocket import http
 from autobahn.twisted.util import peer2str
@@ -66,6 +67,9 @@ __all__ = (
     'WampWebSocketServerFactory',
     'WampWebSocketClientProtocol',
     'WampWebSocketClientFactory',
+
+    'StompWebSocketClientProtocol',
+    'StompWebSocketClientFactory'
 )
 
 
@@ -551,13 +555,13 @@ def listenWS(factory, contextFactory=None, backlog=50, interface=''):
     return listener
 
 
-class WampWebSocketServerProtocol(websocket.WampWebSocketServerProtocol, WebSocketServerProtocol):
+class WampWebSocketServerProtocol(wampwebsocket.WampWebSocketServerProtocol, WebSocketServerProtocol):
     """
     Base class for Twisted-based WAMP-over-WebSocket server protocols.
     """
 
 
-class WampWebSocketServerFactory(websocket.WampWebSocketServerFactory, WebSocketServerFactory):
+class WampWebSocketServerFactory(wampwebsocket.WampWebSocketServerFactory, WebSocketServerFactory):
     """
     Base class for Twisted-based WAMP-over-WebSocket server factories.
     """
@@ -578,7 +582,7 @@ class WampWebSocketServerFactory(websocket.WampWebSocketServerFactory, WebSocket
         else:
             debug_wamp = False
 
-        websocket.WampWebSocketServerFactory.__init__(self, factory, serializers, debug_wamp=debug_wamp)
+        wampwebsocket.WampWebSocketServerFactory.__init__(self, factory, serializers, debug_wamp=debug_wamp)
 
         kwargs['protocols'] = self._protocols
 
@@ -586,13 +590,13 @@ class WampWebSocketServerFactory(websocket.WampWebSocketServerFactory, WebSocket
         WebSocketServerFactory.__init__(self, *args, **kwargs)
 
 
-class WampWebSocketClientProtocol(websocket.WampWebSocketClientProtocol, WebSocketClientProtocol):
+class WampWebSocketClientProtocol(wampwebsocket.WampWebSocketClientProtocol, WebSocketClientProtocol):
     """
     Base class for Twisted-based WAMP-over-WebSocket client protocols.
     """
 
 
-class WampWebSocketClientFactory(websocket.WampWebSocketClientFactory, WebSocketClientFactory):
+class WampWebSocketClientFactory(wampwebsocket.WampWebSocketClientFactory, WebSocketClientFactory):
     """
     Base class for Twisted-based WAMP-over-WebSocket client factories.
     """
@@ -613,7 +617,27 @@ class WampWebSocketClientFactory(websocket.WampWebSocketClientFactory, WebSocket
         else:
             debug_wamp = False
 
-        websocket.WampWebSocketClientFactory.__init__(self, factory, serializers, debug_wamp=debug_wamp)
+        wampwebsocket.WampWebSocketClientFactory.__init__(self, factory, serializers, debug_wamp=debug_wamp)
+
+        kwargs['protocols'] = self._protocols
+
+        WebSocketClientFactory.__init__(self, *args, **kwargs)
+
+class StompWebSocketClientProtocol(stompwebsocket.StompWebSocketClientProtocol, WebSocketClientProtocol):
+    """
+    Base class for Twisted-based STOMP-over-WebSocket client protocols.
+    """
+
+class StompWebSocketClientFactory(stompwebsocket.StompWebSocketClientFactory, WebSocketClientFactory):
+    """
+    Base class for Twisted-based STOMP-over-WebSocket client factories.
+    """
+
+    protocol = StompWebSocketClientProtocol
+
+    def __init__(self, factory, *args, **kwargs):
+
+        stompwebsocket.StompWebSocketClientFactory.__init__(self, factory)
 
         kwargs['protocols'] = self._protocols
 

@@ -31,11 +31,10 @@ import traceback
 from autobahn.websocket import protocol
 from autobahn.websocket import http
 from autobahn.stomp.interfaces import ITransport
+from autobahn.stomp.serializer import Serializer
 from autobahn.stomp.exception import ProtocolError, SerializationError, TransportLost
 
-__all__ = ('StompWebSocketServerProtocol',
-           'StompWebSocketClientProtocol',
-           'StompWebSocketServerFactory',
+__all__ = ('StompWebSocketClientProtocol',
            'StompWebSocketClientFactory')
 
 
@@ -55,26 +54,11 @@ class StompWebSocketProtocol:
         	# create a new STOMP session and fire off session open callback.
         	try:
             		self._session = self.factory._factory()
-            		self._session.onConnect(self)
+            		self._session.onOpen(self)
         	except Exception as e:
             		# Exceptions raised in onOpen are fatal ..
             		reason = "STOMP Internal Error ({0})".format(e)
             		self._bailout(protocol.WebSocketProtocol.CLOSE_STATUS_CODE_INTERNAL_ERROR, reason=reason)
-
-	"""
-    	Mixin for STOMP-over-WebSocket server transports.
-    	"""
-
-	def onConnect(self, request):
-        	"""
-        	Callback from :func:`autobahn.websocket.interfaces.IWebSocketChannel.onConnect`
-        	"""
-		# setup the serializer
-		self._serializer = Serializer()
-		# provide an empty header
-        	headers = {}
-		# STOMP over websockets does not require a subprotocol so return None
-		return None, headers
 
 	def onClose(self, wasClean, code, reason):
         	"""
@@ -114,70 +98,40 @@ class StompWebSocketProtocol:
         	if self.isOpen():
             		try:
                 		payload = self._serializer.serialize(msg)
-            except Exception as e:
-                # all exceptions raised from above should be serialization errors ..
-                raise SerializationError("Unable to serialize STOMP application payload ({0})".format(e))
-            else:
-                self.sendMessage(payload, isBinary)
-        else:
-            raise TransportLost()
+            		except Exception as e:
+                		# all exceptions raised from above should be serialization errors ..
+                		raise SerializationError("Unable to serialize STOMP application payload ({0})".format(e))
+                	# send the message
+			self.sendMessage(payload.encode(), False)
+        	else:
+            		raise TransportLost()
 
-    def isOpen(self):
-        """
-        Implements :func:`autobahn.stomp.interfaces.ITransport.isOpen`
-        """
-        return self._session is not None
+    	def isOpen(self):
+        	"""
+        	Implements :func:`autobahn.stomp.interfaces.ITransport.isOpen`
+        	"""
+        	return self._session is not None
 
-    def close(self):
-        """
-        Implements :func:`autobahn.stomp.interfaces.ITransport.close`
-        """
-        if self.isOpen():
-            self.sendClose(protocol.WebSocketProtocol.CLOSE_STATUS_CODE_NORMAL)
-        else:
-            raise TransportLost()
+    	def close(self):
+        	"""
+        	Implements :func:`autobahn.stomp.interfaces.ITransport.close`
+        	"""
+        	if self.isOpen():
+            		self.sendClose(protocol.WebSocketProtocol.CLOSE_STATUS_CODE_NORMAL)
+        	else:
+            		raise TransportLost()
 
-    def abort(self):
-        """
-        Implements :func:`autobahn.stomp.interfaces.ITransport.abort`
-        """
-        if self.isOpen():
-            self._bailout(protocol.WebSocketProtocol.CLOSE_STATUS_CODE_GOING_AWAY)
-        else:
-            raise TransportLost()
+    	def abort(self):
+        	"""
+        	Implements :func:`autobahn.stomp.interfaces.ITransport.abort`
+        	"""
+        	if self.isOpen():
+            		self._bailout(protocol.WebSocketProtocol.CLOSE_STATUS_CODE_GOING_AWAY)
+        	else:
+            		raise TransportLost()
 
 
 ITransport.register(StompWebSocketProtocol)
-
-
-def parseSubprotocolIdentifier(subprotocol):
-    try:
-        s = subprotocol.split('.')
-        if s[0] != "stomp":
-            raise Exception("invalid protocol %s" % s[0])
-        version = int(s[1])
-        serializerId = '.'.join(s[2:])
-        return version, serializerId
-    except:
-        return None, None
-
-
-class StompWebSocketServerProtocol(StompWebSocketProtocol):
-	"""
-    	Mixin for STOMP-over-WebSocket server transports.
-    	"""
-
-	def onConnect(self, request):
-        	"""
-        	Callback from :func:`autobahn.websocket.interfaces.IWebSocketChannel.onConnect`
-        	"""
-		# setup the serializer
-		self._serializer = Serializer()
-		# provide an empty header
-        	headers = {}
-		# STOMP over websockets does not require a subprotocol so return None
-		return None, headers
-
 
 class StompWebSocketClientProtocol(StompWebSocketProtocol):
     	"""
@@ -188,11 +142,12 @@ class StompWebSocketClientProtocol(StompWebSocketProtocol):
         	"""
         	Callback from :func:`autobahn.websocket.interfaces.IWebSocketChannel.onConnect`
         	"""
-        	if response.protocol not in self.factory.protocols:
-            version, serializerId = parseSubprotocolIdentifier(response.protocol)
+		# make sure the protocol is STOMP v1.2 there is no subprotocol for STOMP-over-Websocket
+		if response.protocol not in self.factory.protocols:
+                	raise Exception("Server does not speak any of the WebSocket subprotocols we requested (%s)." % ', '.join(self.factory.protocols))
 
-        self._serializer = self.factory._serializers[serializerId]
-
+		# create the serializer
+        	self._serializer = Serializer()
 
 class StompWebSocketFactory:
     """
@@ -209,6 +164,9 @@ class StompWebSocketFactory:
         """
         assert(callable(factory))
         self._factory = factory
+
+	# only support v12.stomp for now
+	self._protocols = ["v12.stomp"]
 
 class StompWebSocketServerFactory(StompWebSocketFactory):
     """
