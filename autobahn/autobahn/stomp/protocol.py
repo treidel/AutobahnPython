@@ -40,18 +40,6 @@ from autobahn.stomp import message
 from autobahn.stomp import exception
 from autobahn.stomp.exception import ProtocolError, SessionNotReady
 
-
-class Handler:
-    """
-    """
-
-    def __init__(self, obj, fn, topic, details_arg=None):
-        self.obj = obj
-        self.fn = fn
-        self.topic = topic
-        self.details_arg = details_arg
-
-
 class BaseSession:
     """
     STOMP session base class.
@@ -284,14 +272,14 @@ class ApplicationSession(BaseSession):
         """
         if six.PY2 and type(destination) == str:
             procedure = six.u(destination)
-        assert(type(topic) == six.text_type)
+        assert(isinstance(destination, six.string_types))
 
         if not self._transport:
             raise exception.TransportLost()
 
         receipt = util.id()
 
-        msg = message.Send(destination, payload, str(receipt))
+        msg = message.Send(destination, unicode(payload), str(receipt))
         d = self._create_future()
         self._send_reqs[receipt] = d
         self._transport.send(msg)
