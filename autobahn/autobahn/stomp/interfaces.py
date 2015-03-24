@@ -299,10 +299,11 @@ class ISender(ISession):
     """
 
     @abc.abstractmethod
-    def send(self, destination, payload):
+    def send(self, destination, payload, receipt=False):
         """
-        This will return a Deferred/Future, that when resolved, indicates the message
-        was accepted by the server.
+        If a receipt is requested this methodwill return a Deferred/Future, 
+        that when resolved, indicates the message was accepted by the server.  
+        Otherwise nothing is returned. 
 
         - If the send fails, the returned Deferred/Future will be rejected with an instance
           of :class:`autobahn.stomp.exception.ApplicationError`.
@@ -310,11 +311,13 @@ class ISender(ISession):
         The send may be canceled by canceling the returned Deferred/Future.
 
         :param destination: The destination for the message.
-        :type procedure: unicode
-
+        :type destination: string
         :param payload: The payload for the message.
-        :type procedure: unicode
+        :type payload: string
+        :param receipt: True is a receipt is required.
+        :type receipt: boolean
 
-        :returns: A Deferred/Future for the call result -
+
+        :returns: A Deferred/Future for the call result - 
         :rtype: instance of :tx:`twisted.internet.defer.Deferred` / :py:class:`asyncio.Future`
         """

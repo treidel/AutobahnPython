@@ -119,12 +119,12 @@ class BaseSession:
 ISession.register(BaseSession)
 
 
-class ApplicationSession(BaseSession):
+class ClientSession(BaseSession):
     """
     STOMP endpoint session. This class implements
 
     * :class:`autobahn.stomp.interfaces.ISender`
-    * :class:`autobahn.wamp.interfaces.ITransportHandler`
+    * :class:`autobahn.stomp.interfaces.ITransportHandler`
     """
 
     def __init__(self, host):
@@ -138,12 +138,12 @@ class ApplicationSession(BaseSession):
         self._goodbye_sent = False
         self._transport_is_closing = False
 
-        # outstanding requests
-        self._send_reqs = {}
+        # outstanding requests with receipt
+        self._receipt_reqs = {}
 
     def onOpen(self, transport):
         """
-        Implements :func:`autobahn.wamp.interfaces.ITransportHandler.onOpen`
+        Implements :func:`autobahn.stomp.interfaces.ITransportHandler.onOpen`
         """
         self._transport = transport
         self.onConnect()
@@ -195,9 +195,9 @@ class ApplicationSession(BaseSession):
 
             if isinstance(msg, message.Receipt):
 		receipt_id = int(msg.receipt_id)
-                if receipt_id in self._send_reqs:
+                if receipt_id in self._receipt_reqs:
 
-                    d = self._send_reqs.pop(msg.receipt_id)
+                    d = self._receipt_reqs.pop(msg.receipt_id)
                     self._resolve_future(d, None)
                 else:
                     raise ProtocolError("RECEIPT received for non-pending request ID {0}".format(msg.receipt_id))
@@ -210,13 +210,12 @@ class ApplicationSession(BaseSession):
                 	d = None
 
                 	# ERROR reply to SEND
-                	if msg.request in self._send_reqs:
-                    		d = self._send_reqs.pop(msg.receipt_id)
-
+                	if msg.request in self._receipt_reqs:
+                    		d = self._receipt_reqs.pop(msg.receipt_id)
                 	if d:
                     		self._reject_future(d, self._exception_from_message(msg))
                 	else:
-	                    	raise ProtocolError("ApplicationSession.onMessage(): ERROR received for non-pending request with receipt-id {0}".format(msg.receipt_id))
+	                    	raise ProtocolError("ClientSession.onMessage(): ERROR received for non-pending request with receipt-id {0}".format(msg.receipt_id))
 
             else:
                 raise ProtocolError("Unexpected message {0}".format(msg.__class__))
@@ -243,7 +242,7 @@ class ApplicationSession(BaseSession):
 
     def onAttach(self):
         """
-        Implements :func:`autobahn.stomp.interfaces.ISession.onJoin`
+        Implements :func:`autobahn.stomp.interfaces.ISession.onAttach`
         """
 
     def onDetach(self):
@@ -266,36 +265,44 @@ class ApplicationSession(BaseSession):
         else:
             raise SessionNotReady(u"Already requested to close the session")
 
-    def send(self, destination, payload):
+    def send(self, destination, payload, receipt=True):
         """
         Implements :func:`autobahn.stomp.interfaces.ISender.send`
         """
         if six.PY2 and type(destination) == str:
-            procedure = six.u(destination)
+            destination = six.u(destination)
         assert(isinstance(destination, six.string_types))
 
         if not self._transport:
             raise exception.TransportLost()
 
-        receipt = util.id()
+	if receipt is True:
+        	receipt_id = str(util.id())
+	else:
+		receipt_id = None
 
-        msg = message.Send(destination, unicode(payload), str(receipt))
-        d = self._create_future()
-        self._send_reqs[receipt] = d
-        self._transport.send(msg)
-        return d
+        msg = message.Send(destination, unicode(payload), receipt_id)
+	
+	if receipt is True:
+        	d = self._create_future()
+        	self._receipt_reqs[receipt] = d
+        	self._transport.send(msg)
+        	return d
+	else:
+		self._transport.send(msg)
+		return
 
-ISender.register(ApplicationSession)
-ITransportHandler.register(ApplicationSession)
+ISender.register(ClientSession)
+ITransportHandler.register(ClientSession)
 
-class ApplicationSessionFactory:
+class ClientSessionFactory:
     """
     STOMP endpoint session factory.
     """
 
-    session = ApplicationSession
+    session = ClientSession
     """
-    STOMP application session class to be used in this factory.
+    STOMP client session class to be used in this factory.
     """
 
     def __init__(self, host):
@@ -307,7 +314,7 @@ class ApplicationSessionFactory:
 
     def __call__(self):
         """
-        Creates a new STOMP application session.
+        Creates a new STOMP client session.
 
         :returns: -- An instance of the STOMP application session class as
                      given by `self.session`.

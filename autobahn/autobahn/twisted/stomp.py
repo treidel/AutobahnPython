@@ -42,8 +42,8 @@ from autobahn.twisted.websocket import StompWebSocketClientFactory
 
 __all__ = (
     'FutureMixin',
-    'ApplicationSession',
-    'ApplicationSessionFactory'
+    'ClientSession',
+    'ClientSessionFactory'
 )
 
 
@@ -77,18 +77,18 @@ class FutureMixin:
         return DeferredList(futures, consumeErrors=consume_exceptions)
 
 
-class ApplicationSession(FutureMixin, protocol.ApplicationSession):
+class ClientSession(FutureMixin, protocol.ClientSession):
     """
-    STOMP application session for Twisted-based applications.
-    """
-
-
-class ApplicationSessionFactory(FutureMixin, protocol.ApplicationSessionFactory):
-    """
-    STOMP application session factory for Twisted-based applications.
+    STOMP client session for Twisted-based applications.
     """
 
-    session = ApplicationSession
+
+class ClientSessionFactory(FutureMixin, protocol.ClientSessionFactory):
     """
-   The application session class this application session factory will use. Defaults to :class:`autobahn.twisted.stomp.ApplicationSession`.
+    STOMP client session factory for Twisted-based applications.
+    """
+
+    session = ClientSession
+    """
+   The application session class this application session factory will use. Defaults to :class:`autobahn.twisted.stomp.ClientSession`.
    """
