@@ -197,7 +197,7 @@ class ClientSession(BaseSession):
 		receipt_id = int(msg.receipt_id)
                 if receipt_id in self._receipt_reqs:
 
-                    d = self._receipt_reqs.pop(msg.receipt_id)
+                    d = self._receipt_reqs.pop(receipt_id)
                     self._resolve_future(d, None)
                 else:
                     raise ProtocolError("RECEIPT received for non-pending request ID {0}".format(msg.receipt_id))
@@ -277,15 +277,15 @@ class ClientSession(BaseSession):
             raise exception.TransportLost()
 
 	if receipt is True:
-        	receipt_id = str(util.id())
+        	receipt_id = util.id()
 	else:
 		receipt_id = None
 
-        msg = message.Send(destination, unicode(payload), receipt_id)
+        msg = message.Send(destination, unicode(payload), str(receipt_id))
 	
 	if receipt is True:
         	d = self._create_future()
-        	self._receipt_reqs[receipt] = d
+        	self._receipt_reqs[receipt_id] = d
         	self._transport.send(msg)
         	return d
 	else:
